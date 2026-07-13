@@ -334,22 +334,23 @@ function daysBetween(a,b){ return Math.round((stripTime(b)-stripTime(a))/8640000
 
 async function loadClients(){
   try{
-    const res = await window.storage.get('clients');
-    clients = res && res.value ? JSON.parse(res.value) : SEED;
+    const raw = localStorage.getItem('clients');
+    clients = raw ? JSON.parse(raw) : SEED;
+    if(!raw) localStorage.setItem('clients', JSON.stringify(clients));
   }catch(e){
     clients = SEED;
-    await window.storage.set('clients', JSON.stringify(clients)).catch(()=>{});
   }
 }
 async function saveClients(){
-  await window.storage.set('clients', JSON.stringify(clients)).catch(()=>toast('No se pudo guardar'));
+  try{ localStorage.setItem('clients', JSON.stringify(clients)); }
+  catch(e){ toast('No se pudo guardar (memoria del navegador llena)'); }
 }
 
 async function getPhoto(lang){
   const key = lang === 'en' ? 'photo_en' : 'photo_es';
   try{
-    const res = await window.storage.get(key);
-    if(res && res.value) return res.value;
+    const val = localStorage.getItem(key);
+    if(val) return val;
   }catch(e){}
   return lang === 'en' ? DEFAULT_PHOTO_EN : DEFAULT_PHOTO_ES;
 }
@@ -546,9 +547,13 @@ function wireUpload(btnId, inputId, storageKey, previewId){
     if(!file) return;
     const reader = new FileReader();
     reader.onload = async ()=>{
-      await window.storage.set(storageKey, reader.result).catch(()=>toast('No se pudo guardar la tarjeta'));
+      try{
+        localStorage.setItem(storageKey, reader.result);
+        toast('Tarjeta actualizada');
+      }catch(e){
+        toast('La foto es muy pesada para guardarla en el navegador — prueba una más liviana');
+      }
       document.getElementById(previewId).src = reader.result;
-      toast('Tarjeta actualizada');
     };
     reader.readAsDataURL(file);
   });
