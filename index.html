@@ -126,14 +126,38 @@ section{margin-top:26px;}
 .btn{
   border:none; border-radius:9px; padding:10px 14px; font-weight:700; font-size:13px;
   cursor:pointer; font-family:'Inter',sans-serif; display:inline-flex; align-items:center; gap:6px;
-  transition:transform .12s ease;
+  transition:transform .12s ease; text-decoration:none;
 }
 .btn:active{transform:scale(.97);}
 .btn-sms{background:var(--teal-deep); color:var(--paper);}
-.btn-wa{background:#3CA070; color:#fff;}
-.btn-share{background:var(--rose); color:#fff;}
+.btn-share-sms{background:var(--rose); color:#fff;}
+.btn-share-wa{background:#3CA070; color:#fff;}
 .btn-copy{background:transparent; color:var(--teal); border:1.5px solid var(--teal);}
+.btn-map{
+  background:var(--gold); color:var(--teal-deep);
+}
 .hint{font-size:11px; color:#8a7c68; margin-top:6px; width:100%;}
+
+.dir-row{cursor:pointer;}
+.dir-row:hover{background:var(--paper-2);}
+
+.modal-overlay{
+  display:none; position:fixed; inset:0; background:rgba(43,33,24,.5);
+  align-items:flex-end; justify-content:center; z-index:100; backdrop-filter:blur(2px);
+}
+.modal-overlay.show{display:flex;}
+.modal-card{
+  background:var(--card); width:100%; max-width:640px; border-radius:20px 20px 0 0;
+  padding:22px 20px 28px; max-height:85vh; overflow-y:auto;
+  box-shadow:0 -8px 30px rgba(43,33,24,.3);
+}
+.modal-close{
+  float:right; background:none; border:none; font-size:20px; color:#8a7c68; cursor:pointer; line-height:1;
+}
+.modal-name{font-family:'Fraunces',serif; font-weight:600; font-size:22px; margin:0 0 4px;}
+.modal-field{display:flex; flex-direction:column; gap:2px; margin-top:14px;}
+.modal-field label{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#8a7c68; font-weight:700;}
+.modal-field span{font-size:14.5px; color:var(--ink);}
 
 .upcoming-list{background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
 .upcoming-row{
@@ -253,38 +277,6 @@ details[open] summary::after{content:"–";}
 
   <section>
     <details>
-      <summary>Agregar cliente</summary>
-      <form class="form-grid" id="addForm">
-        <div class="full">
-          <label>Nombre</label>
-          <input type="text" id="f_name" required>
-        </div>
-        <div>
-          <label>Teléfono</label>
-          <input type="tel" id="f_phone" placeholder="(323) 555-0000">
-        </div>
-        <div>
-          <label>Fecha de nacimiento</label>
-          <input type="date" id="f_birth" required>
-        </div>
-        <div>
-          <label>Idioma</label>
-          <select id="f_lang">
-            <option value="es">Español</option>
-            <option value="en">English</option>
-          </select>
-        </div>
-        <div>
-          <label>Dirección</label>
-          <input type="text" id="f_addr" placeholder="Calle, ciudad">
-        </div>
-        <button type="submit" class="form-submit">Guardar cliente</button>
-      </form>
-    </details>
-  </section>
-
-  <section>
-    <details>
       <summary>Buscar en la lista de clientes</summary>
       <div style="padding-bottom:16px;">
         <input type="text" class="search-input" id="searchInput" placeholder="Buscar por nombre...">
@@ -293,6 +285,10 @@ details[open] summary::after{content:"–";}
     </details>
   </section>
 
+</div>
+
+<div class="modal-overlay" id="clientModalOverlay">
+  <div class="modal-card" id="clientModalCard"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1757,14 +1753,14 @@ function renderCard(person, isToday, age, dayLabel){
     <textarea class="msg-box">${message}</textarea>
     <div class="meta-row">
       ${person.phone ? `<span>📞 ${person.phone}</span>` : '<span>Sin teléfono</span>'}
-      ${person.addr ? `<a href="${mapsUrl(person.addr)}" target="_blank" rel="noopener">📍 Ver en mapa</a>` : ''}
     </div>
     <div class="actions">
-      <button class="btn btn-sms">📱 SMS (texto)</button>
-      <button class="btn btn-wa">💬 WhatsApp (texto)</button>
-      <button class="btn btn-share">📤 Compartir con tarjeta</button>
+      <button class="btn btn-sms">📱 SMS directo</button>
+      <button class="btn btn-share-sms">📱 SMS con tarjeta</button>
+      <button class="btn btn-share-wa">💬 WhatsApp con tarjeta</button>
+      ${person.addr ? `<a class="btn btn-map" href="${mapsUrl(person.addr)}" target="_blank" rel="noopener">📍 Mapa</a>` : ''}
       <button class="btn btn-copy">Copiar</button>
-      <div class="hint">"Compartir con tarjeta" abre el panel para enviar por SMS, WhatsApp, etc. con la imagen y el mensaje juntos.</div>
+      <div class="hint">"SMS directo" abre Mensajes solo con el texto, listo para enviar. "SMS/WhatsApp con tarjeta" abren el mismo menú para compartir la foto y el mensaje juntos — ahí eliges Mensajes o WhatsApp (el celular no deja prellenar el número junto con una imagen, así que ese paso final es manual).</div>
     </div>
   `;
 
@@ -1785,18 +1781,12 @@ function renderCard(person, isToday, age, dayLabel){
     window.location.href = `sms:${num}&body=${encodeURIComponent(textarea.value)}`;
   });
 
-  wrap.querySelector('.btn-wa').addEventListener('click', ()=>{
-    const num = toWaNumber(person.phone);
-    if(!num){ toast('Sin teléfono guardado'); return; }
-    window.open(`https://wa.me/${num}?text=${encodeURIComponent(textarea.value)}`, '_blank');
-  });
-
   wrap.querySelector('.btn-copy').addEventListener('click', async ()=>{
     try{ await navigator.clipboard.writeText(textarea.value); toast('Mensaje copiado'); }
     catch(e){ toast('No se pudo copiar'); }
   });
 
-  wrap.querySelector('.btn-share').addEventListener('click', async ()=>{
+  async function shareWithCard(fallbackChannel){
     const currentLang = cardLang[person.id] || person.lang || 'es';
     let shared = false;
     try{
@@ -1809,14 +1799,29 @@ function renderCard(person, isToday, age, dayLabel){
         }
       }
     }catch(e){ /* fall through */ }
-    if(!shared && navigator.share){
-      try{ await navigator.share({text: textarea.value}); shared = true; }catch(e){}
-    }
     if(!shared){
-      try{ await navigator.clipboard.writeText(textarea.value); toast('Este navegador no permite compartir la foto. Mensaje copiado — pégalo y adjunta la tarjeta a mano'); }
-      catch(e){ toast('Copia el mensaje y adjunta la tarjeta a mano'); }
+      try{ await navigator.clipboard.writeText(textarea.value); }catch(e){}
+      if(fallbackChannel === 'sms'){
+        const num = toE164(person.phone);
+        if(num){
+          toast('Este navegador no comparte fotos — mensaje copiado, pégalo y adjunta la tarjeta en Mensajes');
+          window.location.href = `sms:${num}&body=${encodeURIComponent(textarea.value)}`;
+        }else{
+          toast('Sin teléfono guardado — mensaje copiado');
+        }
+      }else{
+        const num = toWaNumber(person.phone);
+        if(num){
+          toast('Este navegador no comparte fotos — mensaje copiado, pégalo y adjunta la tarjeta en WhatsApp');
+          window.open(`https://wa.me/${num}?text=${encodeURIComponent(textarea.value)}`, '_blank');
+        }else{
+          toast('Sin teléfono guardado — mensaje copiado');
+        }
+      }
     }
-  });
+  }
+  wrap.querySelector('.btn-share-sms').addEventListener('click', ()=> shareWithCard('sms'));
+  wrap.querySelector('.btn-share-wa').addEventListener('click', ()=> shareWithCard('wa'));
 
   return wrap;
 }
@@ -1873,7 +1878,9 @@ function renderDirectory(filter=''){
     const row = document.createElement('div');
     row.className = 'dir-row';
     row.innerHTML = `<div><div class="who">${c.name}</div><div class="sub">${c.phone||'sin teléfono'} · ${c.birth||'sin fecha'}</div></div><button class="dir-del">Eliminar</button>`;
-    row.querySelector('.dir-del').addEventListener('click', async ()=>{
+    row.addEventListener('click', ()=> openClientModal(c));
+    row.querySelector('.dir-del').addEventListener('click', async (e)=>{
+      e.stopPropagation();
       clients = clients.filter(x=>x.id!==c.id);
       await saveClients();
       render();
@@ -1882,26 +1889,77 @@ function renderDirectory(filter=''){
   });
 }
 
-document.getElementById('searchInput').addEventListener('input', (e)=> renderDirectory(e.target.value));
-
-document.getElementById('addForm').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const name = document.getElementById('f_name').value.trim();
-  const birth = document.getElementById('f_birth').value;
-  if(!name || !birth){ return; }
-  clients.push({
-    id: 'c'+Date.now(),
-    name,
-    birth,
-    phone: document.getElementById('f_phone').value.trim(),
-    lang: document.getElementById('f_lang').value,
-    addr: document.getElementById('f_addr').value.trim()
+function openClientModal(c){
+  const overlay = document.getElementById('clientModalOverlay');
+  const card = document.getElementById('clientModalCard');
+  const langLabel = c.lang === 'en' ? 'English' : 'Español';
+  card.innerHTML = `
+    <button class="modal-close" id="modalCloseBtn">✕</button>
+    <p class="modal-name">${c.name}</p>
+    <div class="modal-field"><label>Teléfono</label><span>${c.phone || 'Sin teléfono'}</span></div>
+    <div class="modal-field"><label>Fecha de nacimiento</label><span>${c.birth || 'Sin fecha'}</span></div>
+    <div class="modal-field"><label>Idioma</label><span>${langLabel}</span></div>
+    <div class="modal-field"><label>Dirección</label><span>${c.addr || 'Sin dirección'}</span></div>
+    <div class="actions" style="margin-top:18px;">
+      <button class="btn btn-sms" id="modalSms">📱 SMS directo</button>
+      <button class="btn btn-share-sms" id="modalShareSms">📱 SMS con tarjeta</button>
+      <button class="btn btn-share-wa" id="modalShareWa">💬 WhatsApp con tarjeta</button>
+      ${c.addr ? `<a class="btn btn-map" href="${mapsUrl(c.addr)}" target="_blank" rel="noopener">📍 Mapa</a>` : ''}
+    </div>
+  `;
+  const lang = c.lang === 'en' ? 'en' : 'es';
+  const message = MESSAGES[lang](c.name.split(' ')[0]);
+  card.querySelector('#modalCloseBtn').addEventListener('click', closeClientModal);
+  card.querySelector('#modalSms').addEventListener('click', ()=>{
+    const num = toE164(c.phone);
+    if(!num){ toast('Sin teléfono guardado'); return; }
+    window.location.href = `sms:${num}&body=${encodeURIComponent(message)}`;
   });
-  await saveClients();
-  e.target.reset();
-  toast('Cliente guardado');
-  render();
+  async function modalShareWithCard(fallbackChannel){
+    let shared = false;
+    try{
+      const photoData = await getPhoto(lang);
+      if(photoData && navigator.canShare){
+        const file = dataURLtoFile(photoData, 'feliz-cumpleanos.jpg');
+        if(navigator.canShare({files:[file]})){
+          await navigator.share({files:[file], text: message, title:'Feliz cumpleaños'});
+          shared = true;
+        }
+      }
+    }catch(e){ /* fall through */ }
+    if(!shared){
+      try{ await navigator.clipboard.writeText(message); }catch(e){}
+      if(fallbackChannel === 'sms'){
+        const num = toE164(c.phone);
+        if(num){
+          toast('Este navegador no comparte fotos — mensaje copiado, pégalo y adjunta la tarjeta en Mensajes');
+          window.location.href = `sms:${num}&body=${encodeURIComponent(message)}`;
+        }else{
+          toast('Sin teléfono guardado — mensaje copiado');
+        }
+      }else{
+        const num = toWaNumber(c.phone);
+        if(num){
+          toast('Este navegador no comparte fotos — mensaje copiado, pégalo y adjunta la tarjeta en WhatsApp');
+          window.open(`https://wa.me/${num}?text=${encodeURIComponent(message)}`, '_blank');
+        }else{
+          toast('Sin teléfono guardado — mensaje copiado');
+        }
+      }
+    }
+  }
+  card.querySelector('#modalShareSms').addEventListener('click', ()=> modalShareWithCard('sms'));
+  card.querySelector('#modalShareWa').addEventListener('click', ()=> modalShareWithCard('wa'));
+  overlay.classList.add('show');
+}
+function closeClientModal(){
+  document.getElementById('clientModalOverlay').classList.remove('show');
+}
+document.getElementById('clientModalOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'clientModalOverlay') closeClientModal();
 });
+
+document.getElementById('searchInput').addEventListener('input', (e)=> renderDirectory(e.target.value));
 
 function wireUpload(btnId, inputId, storageKey, previewId){
   document.getElementById(btnId).addEventListener('click', ()=> document.getElementById(inputId).click());
